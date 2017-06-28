@@ -251,6 +251,10 @@ def clean_text(text):
     text = text.replace("\n  | title = \n  | title_bg = #C3C3C3\n  | title_fnt = #000\n ", "")
     text = text.replace("{| class=\"navbox collapsible collapsed\" style=\"text-align: left; border: 0px; margin-top: 0.2em;\"\n|-\n! style=\"background-color: #ddffdd;\" | ", "");
     text = text.replace("\n|-\n|", "")
+    #case 6
+    unicode_re = re.compile(ur'[\u0000-\uFFFF]+', re.UNICODE)
+    text = re.sub(unicode_re, '', text)
+
     return text.strip()
 
 def get_reddit_posts(article, current_task, total_count):

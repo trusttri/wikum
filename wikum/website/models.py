@@ -46,6 +46,7 @@ class Article(models.Model):
     #There are some cases when wikicode does not parse a section as a section when given a whole page.
     #To prevent this, we first grab only the section(not the entire page) using "section_index" and parse it.
     section_index = models.IntegerField(default=0)
+    is_closed = models.BooleanField(default=False)
 
     def __unicode__(self):
         return self.title
@@ -92,14 +93,13 @@ class Comment(models.Model):
     reports = models.IntegerField(default=0)
     points = models.IntegerField(default=0)
     
-    created_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(null=True, blank=True)
     edited = models.BooleanField(default=False)
     spam = models.BooleanField(default=False)
     highlighted = models.BooleanField(default=False)
     flagged = models.BooleanField(default=False)
     deleted = models.BooleanField(default=False)
     approved = models.BooleanField(default=True)
-    
     controversial_score = models.IntegerField(default=0)
     
     json_flatten = models.TextField()
@@ -116,6 +116,7 @@ class Comment(models.Model):
 
     def __unicode__(self):
         return 'Comment by %s on %s' % (self.author, self.article.title)
+
     
     
 class CommentAuthor(models.Model):
@@ -148,4 +149,15 @@ class CommentAuthor(models.Model):
             return self.real_name
         else:
             return self.username
-    
+
+class CloseComment(models.Model):
+    id = models.AutoField(primary_key=True)
+    article = models.ForeignKey('Article')
+    author = models.ForeignKey('CommentAuthor', related_name='close_comment_made_by')
+    comment = models.ForeignKey('Comment')
+
+class OpenComment(models.Model):
+    id = models.AutoField(primary_key=True)
+    article = models.ForeignKey('Article')
+    author = models.ForeignKey('CommentAuthor', related_name='open_comment_made_by')
+    comment = models.ForeignKey('Comment')

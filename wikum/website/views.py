@@ -8,13 +8,15 @@ from engine import *
 from django.http import HttpResponse
 from annoying.decorators import render_to
 from django.http.response import HttpResponseBadRequest
+from django.db import connection
 import random
 
 import pickle
 from math import floor
 
 from django.views.decorators.csrf import csrf_exempt
-from website.import_data import get_source, get_article
+from django.db.models import Q
+from website.import_data import get_source, get_article, get_wiki_talk_posts, get_article_from_blob, clean_text
 
 import urllib2
 
@@ -22,6 +24,12 @@ from wikimarkup import parse
 import parse_helper
 import math
 import json
+
+
+_CLOSE_COMMENT_KEYWORDS = ['{{atop','{{quote box', r'\|result=', r'{{(closed)?rfc top', '=== Closing (RFC)?===', r'==Clos(e|ing) comment(s?)==','===Closing RFC===',  r'{{(closed )?rfc top', '===Closing===',r"''' Closing '''" ,r"'''Closing'''",'{{consensus','{{Archive(-?)( ?)top', '{{Discussion( ?)top', 'The following discussion is an archived discussion of the proposal' , 'A summary of the debate may be found at the bottom of the discussion', 'A summary of the conclusions reached follows']
+_CLOSE_COMMENT_RE = re.compile(r'|'.join(_CLOSE_COMMENT_KEYWORDS), re.IGNORECASE|re.DOTALL)
+_ARCHIVE_BOTTOM_KEYWORDS = ['{{Archive bottom}}', '{{Discussion bottom}}', ":''The above discussion is preserved as an archive of the debate.*?No further edits should be made to this discussion."]
+_ARCHIVE_BOTTOM_RE = re.compile(r'|'.join(_ARCHIVE_BOTTOM_KEYWORDS, re.IGNORECASE|re.DOTALL))
 
 @render_to('website/index.html')
 def index(request):
@@ -35,6 +43,7 @@ def index(request):
     
     for art in a:
         art.url = re.sub('#', '%23', art.url)
+        art.url = re.sub('&', '%26', art.url)
 
     resp = {'page': 'index',
             'articles': a,
@@ -91,7 +100,8 @@ def poll_status(request):
 
     json_data = json.dumps(data)
     return HttpResponse(json_data, content_type='application/json')
-    
+
+
 
 def import_article(request):
     data = 'Fail'
@@ -110,7 +120,7 @@ def import_article(request):
 
     return HttpResponse(json_data, content_type='application/json')
 
-    
+
 def summary_page(request):
     url = request.GET['article']
     next = request.GET.get('next')
@@ -125,9 +135,12 @@ def summary_page(request):
     article = get_article(url, source, num)
     
     posts = get_posts(article)
-    
+
+    article.url = re.sub('&', '%26', article.url)
+    article.url = re.sub('#', '%23', article.url)
+
     return {'article': article,
-            'url': re.sub('#', '%23', article.url),
+            'url': article.url,
             'source': article.source,
             'num': num,
             }
@@ -158,7 +171,7 @@ def summary_data(request):
     sort = request.GET.get('sort', 'id')
     
     a = Article.objects.filter(url=url)[num]
-    
+
     next = request.GET.get('next')
     if not next:
         next = 0
@@ -177,7 +190,7 @@ def summary_data(request):
     
     val2 = {}
     val2['children'], val2['hid'], val2['replace'], num_subchildren = recurse_viz(None, posts, False, a, False)
-    
+
     return JsonResponse({'posts': val2})
     
 
@@ -230,11 +243,11 @@ def recurse_viz(parent, posts, replaced, article, is_collapsed):
     replace_children = []
     
     pids = [post.disqus_id for post in posts]
-    
     if replaced:
         num_subtree_children = 0
     else:
         num_subtree_children = len(pids)
+
     
     reps = Comment.objects.filter(reply_to_disqus__in=pids, article=article).select_related()
     for post in posts:
@@ -279,9 +292,7 @@ def recurse_viz(parent, posts, replaced, article, is_collapsed):
                 v1['name'] = post.text
                 v1['summary'] = post.summary
                 v1['extra_summary'] = post.extra_summary
-                
-            
-            
+
             c1 = reps.filter(reply_to_disqus=post.disqus_id).order_by('-points')
             if c1.count() == 0:
                 vals = []
@@ -322,7 +333,7 @@ def summarize_comment(request):
         id = request.POST['id']
         summary = request.POST['comment']
         top_summary, bottom_summary = get_summary(summary)
-        
+
         req_user = request.user if request.user.is_authenticated() else None
         
         c = Comment.objects.get(id=id)
@@ -1225,7 +1236,6 @@ def subtree_data(request):
     return JsonResponse(val)
      
 def recurse_get_parents(parent_dict, post, article):
-    
     parent = Comment.objects.filter(disqus_id=post.reply_to_disqus, article=article)
     if parent:
         parent = parent[0]

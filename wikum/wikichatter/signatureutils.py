@@ -19,12 +19,12 @@ class NoSignature(SignatureUtilsError):
     pass
 
 #There are cases when the time format is broken causing cases like 01:542, 23 September
-# 01:52, 20 September 2013 (UTC) or 01:52, 20 September 2013 (UTC)
-_TIMESTAMP_RE_0 = r"[0-9]{2}:[0-9]*, [0-9]{1,2} [^\W\d]+ [0-9]{4} (\(UTC\))?"
-# 18:45 Mar 10, 2003 (UTC) or 18:45 Mar 10, 2003
-_TIMESTAMP_RE_1 = r"[0-9]{2}:[0-9]* [^\W\d]+ [0-9]{1,2}, [0-9]{4} (\(UTC\))?"
-# 01:54:53, 2005-09-08 (UTC) or 01:54:53, 2005-09-08
-_TIMESTAMP_RE_2 = r"[0-9]{2}:[0-9]*:[0-9]{2}, [0-9]{4}-[0-9]{2}-[0-9]{2} (\(UTC\))?"
+# 01:52, 20 September 2013 (UTC)
+_TIMESTAMP_RE_0 = r"[0-9]{2}:[0-9]*, [0-9]{1,2} [^\W\d]+ [0-9]{4} \(UTC\)"
+# 18:45 Mar 10, 2003 (UTC)
+_TIMESTAMP_RE_1 = r"[0-9]{2}:[0-9]* [^\W\d]+ [0-9]{1,2}, [0-9]{4} \(UTC\)"
+# 01:54:53, 2005-09-08 (UTC)
+_TIMESTAMP_RE_2 = r"[0-9]{2}:[0-9]*:[0-9]{2}, [0-9]{4}-[0-9]{2}-[0-9]{2} \(UTC\)"
 
 
 _TIMESTAMPS = [_TIMESTAMP_RE_0, _TIMESTAMP_RE_1, _TIMESTAMP_RE_2]

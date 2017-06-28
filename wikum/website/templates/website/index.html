@@ -114,8 +114,12 @@
 							  	<a href="/summary?article={{ a.url }}&num={{ a.num }}">
 								
 							  		<li class="row-item">
-							  			<progress value="{{ a.percent_complete }}" max="100"></progress>
-							  			
+										{% if a.is_closed %}
+							  			<progress value="{{ a.percent_complete }}" max="100" class="closed"></progress>
+							  			{% else %}
+										<progress value="{{ a.percent_complete }}" max="100" class="unclosed"></progress>
+										{% endif %}
+
 							  				<div class="blurb">
 							  					
 							  					<span class="percent">
@@ -331,7 +335,8 @@ of detail based on their interests.
  				$('#message').text('');
  				if (task.state == 'SUCCESS') {
  					var article = $('#articleUrl').val();
- 					article = article.replace('#', '%23');
+ 					<!--article = encodeURI(article_url).replace(/%5B/g, '[').replace(/%5D/g, ']');-->
+ 					article = article.replace('&', '%26').replace('#', '%23');
   					$('.status').html(task.state + '!  <a href="/summary?article=' + article + '"><button class="btn btn-default btn-sm">View comments</button></a>');
   				} else {
   					$('.status').html(task.state + ' - ' + task.result);
@@ -343,7 +348,40 @@ of detail based on their interests.
 
 
     <script>
-    
+    	worked = false;
+    	function loadurls(id){
+    		console.log('load!!')
+    		$.ajax({
+				url: "get_from_db",
+				data: {
+					'id': id,
+				},
+				success: function(res){
+					res.forEach(function(article){
+						setTimeout(function(){
+								$.ajax({
+									url: "import_article",
+									data: {
+										'article': article,
+									},
+									success: function(res){
+										console.log(res);
+										$('.status').text('');
+										$('.result').text('');
+										$('#message').text('Wikum is now importing all the comments in the discussion. This may take a while as we are rate-limited by APIs.' +
+										' You can wait or come back later to find the article on the main page.');
+										PollState(res);
+										worked = true;
+									}
+								});
+							}, 50000);
+					});
+
+				}
+			});
+    	}
+
+
     	function submiturl() {
     		var article = $('#articleUrl').val();
 			$.ajax({

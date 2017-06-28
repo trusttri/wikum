@@ -18,13 +18,15 @@ class NoTimestampError(SignatureUtilsError):
 class NoSignature(SignatureUtilsError):
     pass
 
+#There are cases when the time format is broken causing cases like 01:542, 23 September
+# 01:52, 20 September 2013 (UTC) or 01:52, 20 September 2013 (UTC)
+_TIMESTAMP_RE_0 = r"[0-9]{2}:[0-9]*, [0-9]{1,2} [^\W\d]+ [0-9]{4} (\(UTC\))?"
+# 18:45 Mar 10, 2003 (UTC) or 18:45 Mar 10, 2003
+_TIMESTAMP_RE_1 = r"[0-9]{2}:[0-9]* [^\W\d]+ [0-9]{1,2}, [0-9]{4} (\(UTC\))?"
+# 01:54:53, 2005-09-08 (UTC) or 01:54:53, 2005-09-08
+_TIMESTAMP_RE_2 = r"[0-9]{2}:[0-9]*:[0-9]{2}, [0-9]{4}-[0-9]{2}-[0-9]{2} (\(UTC\))?"
 
-# 01:52, 20 September 2013 (UTC)
-_TIMESTAMP_RE_0 = r"[0-9]{2}:[0-9]{2}, [0-9]{1,2} [^\W\d]+ [0-9]{4} \(UTC\)"
-# 18:45 Mar 10, 2003 (UTC)
-_TIMESTAMP_RE_1 = r"[0-9]{2}:[0-9]{2} [^\W\d]+ [0-9]{1,2}, [0-9]{4} \(UTC\)"
-# 01:54:53, 2005-09-08 (UTC)
-_TIMESTAMP_RE_2 = r"[0-9]{2}:[0-9]{2}:[0-9]{2}, [0-9]{4}-[0-9]{2}-[0-9]{2} \(UTC\)"
+
 _TIMESTAMPS = [_TIMESTAMP_RE_0, _TIMESTAMP_RE_1, _TIMESTAMP_RE_2]
 TIMESTAMP_RE = re.compile(r'|'.join(_TIMESTAMPS))
 
@@ -188,8 +190,7 @@ def _extract_rightmost_user(wcode):
     func_picker.extend([(l[0], l[1], _extract_usercontribs_user) for l in uc_locs])
 
     if len(func_picker) == 0:
-        #able to return None because Wikum's code handles it in import_data.py
-        return None
+        raise NoUsernameError(text)
     (start, end, extractor) = max(func_picker, key=lambda e: e[1])
     user = extractor(text[start:end])
     return user

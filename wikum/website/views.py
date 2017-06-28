@@ -16,7 +16,7 @@ from math import floor
 
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q
-from website.import_data import get_source, get_article, get_wiki_talk_posts, get_article_from_blob, clean_text
+from website.import_data import get_source, get_article, get_wiki_talk_posts
 
 import urllib2
 
@@ -29,7 +29,7 @@ import json
 _CLOSE_COMMENT_KEYWORDS = ['{{atop','{{quote box', r'\|result=', r'{{(closed)?rfc top', '=== Closing (RFC)?===', r'==Clos(e|ing) comment(s?)==','===Closing RFC===',  r'{{(closed )?rfc top', '===Closing===',r"''' Closing '''" ,r"'''Closing'''",'{{consensus','{{Archive(-?)( ?)top', '{{Discussion( ?)top', 'The following discussion is an archived discussion of the proposal' , 'A summary of the debate may be found at the bottom of the discussion', 'A summary of the conclusions reached follows']
 _CLOSE_COMMENT_RE = re.compile(r'|'.join(_CLOSE_COMMENT_KEYWORDS), re.IGNORECASE|re.DOTALL)
 _ARCHIVE_BOTTOM_KEYWORDS = ['{{Archive bottom}}', '{{Discussion bottom}}', ":''The above discussion is preserved as an archive of the debate.*?No further edits should be made to this discussion."]
-_ARCHIVE_BOTTOM_RE = re.compile(r'|'.join(_ARCHIVE_BOTTOM_KEYWORDS, re.IGNORECASE|re.DOTALL))
+_ARCHIVE_BOTTOM_RE = re.compile(r'|'.join(_ARCHIVE_BOTTOM_KEYWORDS), re.IGNORECASE|re.DOTALL)
 
 @render_to('website/index.html')
 def index(request):

@@ -131,8 +131,10 @@ def galleryTagHook(parser_env, body, attributes={}):
                                                                                                   width,
                                                                                                   height)
                 text += '</div></div></div><div class="gallerytext"><p>'
-                if len(res)>1 and res[1] == 'thumb':
-                    #need to test length because of cases like https://en.wikipedia.org/wiki/Talk:Federal_Assault_Weapons_Ban/Archive_2#RfC:_Is_inclusion_of_the_word_.22cosmetic.22_in_the_Criteria_section_appropriate.3F
+
+                if len(res) > 1 and res[1] == 'thumb':
+                    # need to test length because of cases like https://en.wikipedia.org/wiki/Talk:Federal_Assault_Weapons_Ban/Archive_2#RfC:_Is_inclusion_of_the_word_.22cosmetic.22_in_the_Criteria_section_appropriate.3F
+
                     inner_text = '|'.join(res[2:]).strip()
                 else:
                     inner_text = '|'.join(res[1:]).strip()
@@ -161,6 +163,7 @@ def userHook(parser_env, namespace, body):
 
 def fileHook(parser_env, namespace, body):
     (file_name, pipe, size) = body.partition('|')
+
     size_match = re.search('[1-9][0-9]{0,3}' , size)
     if size_match:
         size = size_match.group(0)

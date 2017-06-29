@@ -59,6 +59,9 @@ def get_open_comment():
         OpenComment.objects.get_or_create(article = article, comment = open_comment, author = open_comment.author)
 
 
+_CLOSE_COMMENT_KEYWORDS =  [r'{{(atop|quote box|consensus|Archive(-?)( ?)top|Discussion( ?)top|(closed.*?)?rfc top)', r'\|result=', r"(={2,3}|''')( )?Clos(e|ing)( comment(s?)|( RFC)?)( )?(={2,3}|''')" , 'The following discussion is an archived discussion of the proposal' , 'A summary of the debate may be found at the bottom of the discussion', 'A summary of the conclusions reached follows']
+_CLOSE_COMMENT_RE = re.compile(r'|'.join(_CLOSE_COMMENT_KEYWORDS), re.IGNORECASE|re.DOTALL)
+
 def get_article(url, source, num):
     article = Article.objects.filter(url=url)
     if article.count() == 0:
@@ -96,7 +99,7 @@ def get_article(url, source, num):
             
             from wikitools import wiki, api
             site = wiki.Wiki(domain + '/w/api.php')
-            # page = urllib2.unquote(str(wiki_sub[0]) + ':' + str(wiki_page))
+
             page = urllib2.unquote(str(wiki_sub[0]) + ':' + wiki_page.encode('ascii', 'ignore'))
             params = {'action': 'parse', 'prop': 'sections','page': page ,'redirects':'yes' }
             request = api.APIRequest(site, params)
@@ -118,6 +121,7 @@ def get_article(url, source, num):
                 title = title + ' - ' + section_title
             link = urllib2.unquote(url)
         article,_ = Article.objects.get_or_create(disqus_id=id, title=title, url=link, source=source, section_index=section_index)
+
     else:
         article = article[num]
         
@@ -165,8 +169,9 @@ def get_wiki_talk_posts(article, current_task, total_count):
     # There are some cases when wikicode does not parse a section as a section when given a "whole page".
     # To prevent this, we first grab only the section(not the entire page) using "section_index" and parse it.
     section_index = article.section_index
-    params = {'action': 'query', 'titles': title[0], 'prop': 'revisions', 'rvprop': 'content', 'format': 'json',
-              'redirects': 'yes'}
+
+    params = {'action': 'query', 'titles': title[0],'prop': 'revisions', 'rvprop': 'content', 'format': 'json','redirects':'yes'}
+
     if section_index:
         params['rvsection'] = section_index
 
@@ -176,7 +181,9 @@ def get_wiki_talk_posts(article, current_task, total_count):
 
     text = result['query']['pages'][id]['revisions'][0]['*']
 
-    def find_section(sections, section_title):
+
+    def get_section(sections, section_title):
+
         for s in sections:
             heading_title = s.get('heading', '')
             heading_title = re.sub(r'\]', '', heading_title)
@@ -185,20 +192,20 @@ def get_wiki_talk_posts(article, current_task, total_count):
             if heading_title.strip() == str(section_title).strip():
                 return s
 
-
     def find_outer_section(title, text, id):
-        #check if closing comment is in here, if not should look for the outer section
+        # Check if closing comment is in here, if not look for the outer section.
+        # If there is an outer section, choose it only if it has a closing statement,
         if len(title)>1:
             section_title = title[1].encode('ascii', 'ignore')
             params = {'action': 'query', 'titles': title[0], 'prop': 'revisions', 'rvprop': 'content', 'format': 'json', 'redirects': 'yes'}
             result = api.APIRequest(site, params).query()
             whole_text = clean_text( result['query']['pages'][id]['revisions'][0]['*'] )
 
+
             import wikichatter as wc
             parsed_whole_text = wc.parse(whole_text.encode('ascii','ignore'))
             sections = parsed_whole_text['sections']
 
-            for outer_section in sections:
                 found_subection = find_section(outer_section['subsections'], section_title)
                 if found_subection:
                     outer_comments = outer_section['comments']
@@ -228,6 +235,12 @@ def get_wiki_talk_posts(article, current_task, total_count):
 
     #clean wikitext
     text = clean_text(text)
+
+    # If there isn't a closing statement, it means that the RfC could exist as a subsection of another section, with the closing statement in the parent section.
+    # Example: https://en.wikipedia.org/wiki/Talk:Alexz_Johnson#Lead_image
+    if not re.search(_CLOSE_COMMENT_RE, text):
+        text = find_outer_section(title, text, id)
+
     import wikichatter as wc
     parsed_text = wc.parse(text.encode('ascii','ignore'))
     
@@ -235,7 +248,9 @@ def get_wiki_talk_posts(article, current_task, total_count):
     if len(title) > 1:
         section_title = title[1].encode('ascii','ignore')
         sections = parsed_text['sections']
-        found_section = find_section(sections, section_title)
+
+        found_section = get_section(sections, section_title)
+
         if found_section:
             start_sections = found_section['subsections']
             start_comments = found_section['comments']
@@ -290,7 +305,7 @@ def import_wiki_authors(authors, article):
             found_authors.append(author)
         else:
             anonymous_exist = True
-    # authors_list = '|'.join(authors)
+
     authors_list = '|'.join(found_authors)
     
     from wikitools import wiki, api
@@ -323,7 +338,7 @@ def import_wiki_authors(authors, article):
 
     if anonymous_exist:
         comment_authors.append(CommentAuthor.objects.get(disqus_id='anonymous', is_wikipedia=True))
-        
+
     return comment_authors
     
     

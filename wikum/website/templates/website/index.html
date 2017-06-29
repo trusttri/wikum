@@ -337,6 +337,7 @@ of detail based on their interests.
  					var article = $('#articleUrl').val();
  					<!--article = encodeURI(article_url).replace(/%5B/g, '[').replace(/%5D/g, ']');-->
  					article = article.replace('&', '%26').replace('#', '%23');
+
   					$('.status').html(task.state + '!  <a href="/summary?article=' + article + '"><button class="btn btn-default btn-sm">View comments</button></a>');
   				} else {
   					$('.status').html(task.state + ' - ' + task.result);

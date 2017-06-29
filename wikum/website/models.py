@@ -42,11 +42,13 @@ class Article(models.Model):
     comment_num = models.IntegerField(default=0)
     summary_num = models.IntegerField(default=0)
 
+
     #"section_index" is a column for storing the index number of the section within the page.
     #There are some cases when wikicode does not parse a section as a section when given a whole page.
     #To prevent this, we first grab only the section(not the entire page) using "section_index" and parse it.
     section_index = models.IntegerField(default=0)
     is_closed = models.BooleanField(default=False)
+
 
     def __unicode__(self):
         return self.title

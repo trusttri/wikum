@@ -1,4 +1,4 @@
-from website.models import Article, Source, CommentAuthor, Comment, History, Tag
+from website.models import Article, Source, CommentAuthor, Comment, History, Tag, OpenComment, CloseComment
 from wikum.settings import DISQUS_API_KEY
 import urllib2
 import json
@@ -12,8 +12,145 @@ USER_AGENT = "website:Wikum:v1.0.0 (by /u/smileyamers)"
 THREAD_CALL = 'http://disqus.com/api/3.0/threads/list.json?api_key=%s&forum=%s&thread=link:%s'
 COMMENTS_CALL = 'https://disqus.com/api/3.0/threads/listPosts.json?api_key=%s&thread=%s'
 
-_CLOSE_COMMENT_KEYWORDS =  [r'{{(atop|quote box|consensus|Archive(-?)( ?)top|Discussion( ?)top|(closed.*?)?rfc top)', r'\|result=', r"(={2,3}|''')( )?Clos(e|ing)( comment(s?)|( RFC)?)( )?(={2,3}|''')" , 'The following discussion is an archived discussion of the proposal' , 'A summary of the debate may be found at the bottom of the discussion', 'A summary of the conclusions reached follows']
+_CLOSE_COMMENT_KEYWORDS =  [r'{{(atop|quote box|consensus|Archive(-?)( ?)top|Discussion( ?)top|(closed.*?)?rfc top)', r'\|result=', r"={2,3}( )?Clos(e|ing)( comment(s?)|( RFC)?)( )?={2,3}" , 'The following discussion is an archived discussion of the proposal' , 'A summary of the debate may be found at the bottom of the discussion', 'A summary of the conclusions reached follows']
 _CLOSE_COMMENT_RE = re.compile(r'|'.join(_CLOSE_COMMENT_KEYWORDS), re.IGNORECASE|re.DOTALL)
+
+
+def get_comment_levels():
+    articles = Article.objects.all()
+    for a in articles:
+        article_id = a.id
+        comments = Comment.objects.filter(article_id = article_id, reply_to_disqus__isnull=True)
+        for comment in comments:
+            level = recur_level(comment, article_id, 0)
+            comment.reply_level = level
+            comment.save()
+
+def recur_level(comment, article_id, level):
+    if comment.disqus_id != '':
+        replies = Comment.objects.filter(reply_to_disqus=comment.disqus_id, article_id=article_id)
+        if replies:
+            levels = []
+            level += 1
+            for r in replies:
+                levels.append(recur_level(r, article_id, level))
+            return max(levels)
+        return level
+
+
+def get_deep_replies():
+    articles = Article.objects.all()
+    for a in articles:
+        article_id = a.id
+        comments = Comment.objects.filter(article_id = article_id)
+        for comment in comments:
+            deep_num_replies = recur_replies(comment, article_id)
+            comment.deep_num_replies = deep_num_replies
+            comment.save()
+
+
+def recur_replies(comment, article_id):
+    total_replies = 0
+    if comment.disqus_id != '':
+        replies = Comment.objects.filter(reply_to_disqus=comment.disqus_id, article_id=article_id)
+        total_replies += replies.count()
+        for r in replies:
+            total_replies += recur_replies(r, article_id)
+    return total_replies
+
+
+def close_article():
+    close_comments = CloseComment.objects.all()
+    for cc in close_comments:
+        article_id = cc.article_id
+        article = Article.objects.get(id=article_id)
+        article.closed = True
+        article.save()
+
+
+def fix_timestamp():
+    comments = Comment.objects.all()
+    for comment in comments:
+        comment_text = comment.text
+        import wikichatter as wc
+        parsed_comments = wc.parse(comment_text.encode('ascii', 'ignore'))['sections'][0]['comments']
+        timestamps = []
+        for parsed_text in parsed_comments:
+            if 'time_stamp' in parsed_text:
+                timestamps.append(parsed_text['time_stamp'])
+        if len(timestamps)>0:
+            timestamp = timestamps[-1]
+            formats = ['%H:%M, %d %B %Y (%Z)', '%H:%M, %d %b %Y (%Z)', '%H:%M %b %d, %Y (%Z)']
+            for date_format in formats:
+                try:
+                    time = datetime.datetime.strptime(timestamp, date_format)
+                except ValueError:
+                    pass
+            if time:
+                comment.created_at = time
+            else:
+                comment.created_at = None
+            comment.save()
+
+
+def add_open_comment(url, comment_id):
+    article = Article.objects.get(url=url)
+    comments = Comment.objects.filter(article_id = article.id)
+    comment_ids = [c.id for c in comments]
+    existing_open_comment = OpenComment.objects.get(article_id = article.id)
+    if existing_open_comment:
+        print "deete already existing open comment"
+        print existing_open_comment.comment_id
+        existing_open_comment.delete()
+    if comment_id in comment_ids:
+        comment = Comment.objects.get(id=comment_id)
+        OpenComment.objects.get_or_create(article=article, comment=comment, author=comment.author)
+        article.closed = True
+        article.save()
+        print "successfully saved"
+    else:
+        print "the comment is not among the article's comments"
+
+
+def add_close_comment(url, comment_id):
+    article = Article.objects.get(url=url)
+    comments = Comment.objects.filter(article_id = article.id)
+    comment_ids = [c.id for c in comments]
+    if comment_id in comment_ids:
+        comment = Comment.objects.get(id=comment_id)
+        CloseComment.objects.get_or_create(article=article, comment=comment, author=comment.author)
+        article.closed = True
+        article.save()
+        print "successfully saved"
+    else:
+        print "the comment is not among the article's comments"
+
+def get_final_closed_rfcs():
+    close_comments = CloseComment.objects.all()
+    for cc in close_comments:
+        article_id = cc.article_id
+        a = Article.objects.get(id = article_id)
+        a.closed = True
+        a.save()
+
+def get_close_comment():
+    articles = Article.objects.all()
+    for article in articles:
+        article_comments = Comment.objects.filter(article_id = article.id)
+        for comment in article_comments:
+            if re.search(_CLOSE_COMMENT_RE, comment.text):
+                CloseComment.objects.get_or_create(article = article, comment = comment, author = comment.author)
+                article.closed = True
+                article.save()
+
+def get_open_comment():
+    articles = Article.objects.all()
+    for article in articles:
+        article_comments = Comment.objects.filter(article_id = article.id, created_at__isnull=False).exclude(author_id=13891).order_by('created_at')
+        #get the most oldest one
+        open_comment = article_comments.first()
+        OpenComment.objects.get_or_create(article = article, comment = open_comment, author = open_comment.author)
+
 
 def get_article(url, source, num):
     article = Article.objects.filter(url=url)
@@ -54,25 +191,31 @@ def get_article(url, source, num):
             site = wiki.Wiki(domain + '/w/api.php')
             page = urllib2.unquote(str(wiki_sub[0]) + ':' + wiki_page.encode('ascii', 'ignore'))
             params = {'action': 'parse', 'prop': 'sections','page': page ,'redirects':'yes' }
-            request = api.APIRequest(site, params)
-            result = request.query()
+            from wikitools import wiki, api
+            try:
+                request = api.APIRequest(site, params)
 
-            id = str(result['parse']['pageid'])
-            section_title = None
-            section_index = None
+                result = request.query()
 
-            if section:
-                for s in result['parse']['sections']:
-                    if s['anchor'] == section:
-                        id = str(id) + '#' + str(s['index'])
-                        section_title = s['line']
-                        section_index = s['index']
-            title = result['parse']['title']
-            if section_title:
-                title = title + ' - ' + section_title
+                id = str(result['parse']['pageid'])
+                section_title = None
+                section_index = None
 
-            link = urllib2.unquote(url)
-        article,_ = Article.objects.get_or_create(disqus_id=id, title=title, url=link, source=source, section_index=section_index)
+                if section:
+                    for s in result['parse']['sections']:
+                        if s['anchor'] == section:
+                            id = str(id) + '#' + str(s['index'])
+                            section_title = s['line']
+                            section_index = s['index']
+                title = result['parse']['title']
+                if section_title:
+                    title = title + ' - ' + section_title
+
+                link = urllib2.unquote(url)
+                article,_ = Article.objects.get_or_create(disqus_id=id, title=title, url=link, source=source, section_index=section_index)
+
+            except api.APIError:
+                pass
     else:
         article = article[num]
         
@@ -150,26 +293,8 @@ def _clean_wiki_text(text):
     text = re.sub(wrong_outdent_temp, "{{outdent}}\n", text)
     return text.strip()
 
+
 def get_wiki_talk_posts(article, current_task, total_count):
-    from wikitools import wiki, api
-    domain = article.url.split('/wiki/')[0]
-    site = wiki.Wiki(domain + '/w/api.php')
-    
-    title = article.title.split(' - ')
-    # "section_index" is the index number of the section within the page.
-    # There are some cases when wikicode does not parse a section as a section when given a "whole page".
-    # To prevent this, we first grab only the section(not the entire page) using "section_index" and parse it.
-    section_index = article.section_index
-
-    params = {'action': 'query', 'titles': title[0],'prop': 'revisions', 'rvprop': 'content', 'format': 'json','redirects':'yes'}
-    if section_index:
-        params['rvsection'] = section_index
-
-    request = api.APIRequest(site, params)
-    result = request.query()
-    id = article.disqus_id.split('#')[0]
-    text = result['query']['pages'][id]['revisions'][0]['*']
-
     def get_section(sections, section_title):
         for s in sections:
             heading_title = s.get('heading', '')
@@ -213,28 +338,64 @@ def get_wiki_talk_posts(article, current_task, total_count):
                                     return final_section_text
         return text
 
+    from wikitools import wiki, api
+    domain = article.url.split('/wiki/')[0]
+    site = wiki.Wiki(domain + '/w/api.php')
+    
+    title = article.title.split(' - ')
+    # "section_index" is the index number of the section within the page.
+    # There are some cases when wikicode does not parse a section as a section when given a "whole page".
+    # To prevent this, we first grab only the section(not the entire page) using "section_index" and parse it.
+    section_index = article.section_index
+
+    params = {'action': 'query', 'titles': title[0],'prop': 'revisions', 'rvprop': 'content', 'format': 'json','redirects':'yes'}
+    if section_index:
+        params['rvsection'] = section_index
+
+    request = api.APIRequest(site, params)
+    result = request.query()
+    id = article.disqus_id.split('#')[0]
+
+    if id in result['query']['pages']:
+        text = result['query']['pages'][id]['revisions'][0]['*']
+
+
     # If there isn't a closing statement, it means that the RfC could exist as a subsection of another section, with the closing statement in the parent section.
     # Example: https://en.wikipedia.org/wiki/Talk:Alexz_Johnson#Lead_image
-    if not re.search(_CLOSE_COMMENT_RE, text):
-        text = find_outer_section(title, text, id)
+        if not re.search(_CLOSE_COMMENT_RE, text):
+            text = find_outer_section(title, text, id)
 
-    text = _clean_wiki_text(text)
+        text = _clean_wiki_text(text)
 
-    import wikichatter as wc
-    parsed_text = wc.parse(text.encode('ascii','ignore'))
-    
-    start_sections = parsed_text['sections']
-    if len(title) > 1:
-        section_title = title[1].encode('ascii','ignore')
-        sections = parsed_text['sections']
-        found_section = get_section(sections, section_title)
-        if found_section:
-            start_sections = found_section['subsections']
-            start_comments = found_section['comments']
-            total_count = import_wiki_talk_posts(start_comments, article, None, current_task, total_count)
+        import wikichatter as wc
+        parsed_text = wc.parse(text.encode('ascii','ignore'))
 
-    total_count = import_wiki_sessions(start_sections, article, None, current_task, total_count)
-    
+        start_sections = parsed_text['sections']
+        if len(title) > 1:
+            section_title = title[1].encode('ascii','ignore')
+            sections = parsed_text['sections']
+            found_section = get_section(sections, section_title)
+            if found_section:
+                start_sections = found_section['subsections']
+                start_comments = found_section['comments']
+                total_count = import_wiki_talk_posts(start_comments, article, None, current_task, total_count)
+
+        total_count = import_wiki_sessions(start_sections, article, None, current_task, total_count)
+
+        #save the closing and open comment
+        article_comments = Comment.objects.filter(article_id=article.id, created_at__isnull=False).exclude(author_id=13891).order_by('created_at')
+        open_comment = article_comments.first() # get the most oldest one
+        if open_comment:
+            OpenComment.objects.get_or_create(article=article, comment=open_comment, author=open_comment.author)
+
+        article_comments = Comment.objects.filter(article_id=article.id)
+        for comment in article_comments:
+            if re.search(_CLOSE_COMMENT_RE, comment.text):
+                CloseComment.objects.get_or_create(article=article, comment=comment, author=comment.author)
+                article.closed = True
+                article.save()
+
+
 def import_wiki_sessions(sections, article, reply_to, current_task, total_count):
     for section in sections:
         heading = section.get('heading', None)
@@ -320,8 +481,8 @@ def import_wiki_authors(authors, article):
 def import_wiki_talk_posts(comments, article, reply_to, current_task, total_count):    
     for comment in comments:
         text = '\n'.join(comment['text_blocks'])
-       
         author = comment.get('author')
+
         if author:
             comment_author = import_wiki_authors([author], article)[0]
         else:
@@ -331,15 +492,15 @@ def import_wiki_talk_posts(comments, article, reply_to, current_task, total_coun
         if comments.count() > 0:
             comment_wikum = comments[0]
         else:
-            time = None
+            # time = None
             timestamp = comment.get('time_stamp')
-            if timestamp:
-                formats = ['%H:%M, %d %B %Y (%Z)', '%H:%M, %d %b %Y (%Z)', '%H:%M %b %d, %Y (%Z)']
-                for date_format in formats:
-                    try:
-                        time = datetime.datetime.strptime(timestamp, date_format)
-                    except ValueError:
-                        pass
+            # if timestamp:
+            #     formats = ['%H:%M, %d %B %Y (%Z)', '%H:%M, %d %b %Y (%Z)', '%H:%M %b %d, %Y (%Z)']
+            #     for date_format in formats:
+            #         try:
+            #             time = datetime.datetime.strptime(timestamp, date_format)
+            #         except ValueError:
+            #             pass
             cosigners = [sign['author'] for sign in comment['cosigners']]
             comment_cosigners = import_wiki_authors(cosigners, article)
 
@@ -349,9 +510,11 @@ def import_wiki_talk_posts(comments, article, reply_to, current_task, total_coun
                                                    reply_to_disqus = reply_to,
                                                    text_len = len(text),
                                                    )
-            if time:
-                comment_wikum.created_at = time
-            
+            # if time:
+                # comment_wikum.created_at = time
+            if timestamp:
+                comment_wikum.created_at = timestamp
+
             comment_wikum.save()
             comment_wikum.disqus_id = comment_wikum.id
             comment_wikum.save()

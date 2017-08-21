@@ -47,6 +47,8 @@ class Article(models.Model):
     # To prevent this, we first grab only the section(not the entire page) using "section_index" and parse it.
     section_index = models.IntegerField(default=0)
 
+    closed = models.BooleanField(default=False)
+
     def __unicode__(self):
         return self.title
     
@@ -114,6 +116,10 @@ class Comment(models.Model):
     
     tags = models.ManyToManyField(Tag)
 
+    deep_num_replies = models.IntegerField(default=0)
+
+    reply_level = models.IntegerField(default=0)
+
     def __unicode__(self):
         return 'Comment by %s on %s' % (self.author, self.article.title)
     
@@ -148,4 +154,15 @@ class CommentAuthor(models.Model):
             return self.real_name
         else:
             return self.username
-    
+
+class OpenComment(models.Model):
+    id = models.AutoField(primary_key=True)
+    article = models.ForeignKey('Article')
+    author = models.ForeignKey('CommentAuthor')
+    comment = models.ForeignKey('Comment')
+
+class CloseComment(models.Model):
+    id = models.AutoField(primary_key=True)
+    article = models.ForeignKey('Article')
+    author = models.ForeignKey('CommentAuthor')
+    comment = models.ForeignKey('Comment')

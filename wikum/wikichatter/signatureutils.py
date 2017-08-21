@@ -1,7 +1,7 @@
 import re
 import mwparserfromhell as mwp
 from .error import Error
-
+import datetime
 
 class SignatureUtilsError(Error):
     pass
@@ -19,11 +19,11 @@ class NoSignature(SignatureUtilsError):
     pass
 
 # 01:52, 20 September 2013 (UTC)
-_TIMESTAMP_RE_0 = r"[0-9]{2}:[0-9]{2},? [0-9]{1,2} [^\W\d]+ [0-9]{4}( \(UTC\))?"
+_TIMESTAMP_RE_0 = r"[0-9]{2}:[0-9]{2},? [0-9]{1,2} [^\W\d]+ [0-9]{4}(?: \(UTC\))?"
 # 18:45 Mar 10, 2003 (UTC)
-_TIMESTAMP_RE_1 = r"[0-9]{2}:[0-9]{2},? [^\W\d]+ [0-9]{1,2},? [0-9]{4}( \(UTC\))?"
+_TIMESTAMP_RE_1 = r"[0-9]{2}:[0-9]{2},? [^\W\d]+ [0-9]{1,2},? [0-9]{4}(?: \(UTC\))?"
 # 01:54:53, 2005-09-08 (UTC)
-_TIMESTAMP_RE_2 = r"[0-9]{2}:[0-9]{2}:[0-9]{2},? [0-9]{4}-[0-9]{2}-[0-9]{2}( \(UTC\))?"
+_TIMESTAMP_RE_2 = r"[0-9]{2}:[0-9]{2}:[0-9]{2},? [0-9]{4}-[0-9]{2}-[0-9]{2}(?: \(UTC\))?"
 
 _TIMESTAMPS = [_TIMESTAMP_RE_0, _TIMESTAMP_RE_1, _TIMESTAMP_RE_2]
 TIMESTAMP_RE = re.compile(r'|'.join(_TIMESTAMPS))
@@ -228,10 +228,33 @@ def _extract_usercontribs_user(text):
 
 def _extract_timestamp_from_sig_code(sig_code):
     text = str(sig_code)
-    result = re.search(TIMESTAMP_RE, text)
-    if not result:
+    result = re.findall(TIMESTAMP_RE, text)
+    if len(result) == 0:
         raise NoTimestampError(text)
-    return result.group(0)
+
+    def turn_to_datetime(timestamp):
+        formats = ['%H:%M, %d %B %Y (%Z)', '%H:%M, %d %b %Y (%Z)', '%H:%M %b %d, %Y (%Z)']
+        time = None
+        for date_format in formats:
+            try:
+                time = datetime.datetime.strptime(timestamp, date_format)
+            except ValueError:
+                pass
+        return time
+
+    sorted_result = sorted([turn_to_datetime(time) for time in result if turn_to_datetime(time) is not None])
+    if len(sorted_result)>0:
+        return sorted_result[-1]
+    return None
+
+    # result = re.search(TIMESTAMP_RE, text)
+    # if not result:
+    #     raise NoTimestampError(text)
+    # return result.group(0)
+#    result = re.finditer(TIMESTAMP_RE, text)
+#    if not result:
+#        raise NoTimestampError(text)
+#    return [r for r in result][-1].group(0)
 
 
 def _clean_extracted_username(raw_username):

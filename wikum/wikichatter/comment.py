@@ -66,9 +66,14 @@ class Comment(object):
 
     def load_signature(self):
         signatures = self._find_signatures()
+        timestamps = sorted([signature['timestamp'] for signature in signatures if signature['timestamp'] is not None])
+        # check here out
+
         if len(signatures) > 0:
             self.author = signatures[0]['user']
-            self.time_stamp = signatures[0]['timestamp']
+            # get the most recent one
+            if len(timestamps) > 0:
+                self.time_stamp = timestamps[-1]
             self.cosigners = signatures[1:]
 
     def _find_signatures(self):

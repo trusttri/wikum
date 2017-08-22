@@ -22,8 +22,9 @@ except IOError:
     print "Unable to open configuration file!"
 
 
-_ENV_FILE_PATH = '/opt/wikum/env'
-_DEBUG_FILE_PATH = '/opt/wikum/debug'
+DISQUS_API_KEY = 'NrTAM2uOLLfr1HUr4HIYlsbepZLcyhORNg7fDwnxaU9caJLLyTyz6ENjI3bpVCNA';
+_ENV_FILE_PATH = 'C:\Users\Jane Im\wikum\wikum\opt\wikum\env'
+_DEBUG_FILE_PATH = 'C:\Users\Jane Im\wikum\wikum\opt\wikum\debug'
 
 def _get_env():
     f = open(_ENV_FILE_PATH)
@@ -33,8 +34,9 @@ def _get_env():
         env = env[:-1]
     
     f.close()
-    return env
-ENV = _get_env() 
+ 
+ENV = _get_env()
+
 
 def _get_debug():
     f = open(_DEBUG_FILE_PATH)
@@ -82,6 +84,7 @@ INSTALLED_APPS = [
     'django.contrib.sites',
     'website',
     'account',
+
 ]
 
 MIDDLEWARE_CLASSES = [
@@ -159,9 +162,13 @@ BROKER_URL = 'amqp://guest:guest@localhost:5672//'
 
 # List of modules to import when celery starts.
 CELERY_IMPORTS = ("website.tasks",)
-CELERY_RESULT_BACKEND = "db+mysql://root:koob@localhost/celery"
+CELERY_RESULT_BACKEND = "db+mysql://root:Scott605@localhost/celery"
 CELERY_IGNORE_RESULT = False
 
+#newly added
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
 
 # Internationalization
 # https://docs.djangoproject.com/en/1.9/topics/i18n/
@@ -174,10 +181,14 @@ USE_I18N = True
 
 USE_L10N = True
 
-USE_TZ = True
+USE_TZ = False
 
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.9/howto/static-files/
 
 STATIC_URL = '/static/'
+
+
+SECRET_KEY = 'fdk@f0bfxm@o6!ljm&p%$^j^c%xh4dt^x7v9ao7lqyerj%v8u^'
+

@@ -28,39 +28,101 @@ _FYI_RE = r"{{FYI\|Pointer to relevant discussion elsewhere.}}|{{FYI}}|{{FYI\|"
 
 _pointer_re = re.compile(r'|'.join([_WIKI_TEMPLATE_RFC_RE, _HTTPS_RFC_RE, _FYI_RE]), re.IGNORECASE)
 
+_rfc_tag_re = re.compile(r'({{rfc)|(The following discussion is closed and should not be)|({{Archive top)', re.I)
+
+"""
+DIVIDING RFCS
+"""
+# step 1 if the "candidate" contains the below, it's definitely an RfC
+# won't be much help though
 _rfc_tag_re = re.compile(r'{{rfc', re.I)
+_CLOSE_COMMENT_KEYWORDS =  [r'{{(atop|quote box|consensus|Archive(-?)( ?)top|Discussion( ?)top|(closed.*?)?rfc top)', r'\|result=', r"={2,3}( )?Clos(e|ing)( comment(s?)|( RFC)?)( )?={2,3}" , 'The following discussion is an archived discussion of the proposal' , 'A summary of the debate may be found at the bottom of the discussion', 'A summary of the conclusions reached follows']
+_CLOSE_COMMENT_RE = re.compile(r'|'.join(_CLOSE_COMMENT_KEYWORDS), re.IGNORECASE|re.DOTALL)
 
-# "[[WP:RFC|request for comment|]]
-exclude_rfc_pages = [ r"\[\[WP:RFC(\|[^\]]*)?\]\]",
-                      r"\[\[Wikipedia:Requests for comment/All(\|[^\]]*)?\]\]", r"\[\[Wikipedia:Requests for comment(\|[^\]]*)?\]\]",
-                      r"\[\[Wikipedia:Requests for comment/Maths, science, and technology(\|[^\]]*)?\]\]",
-                      r"\[\[Wikipedia:Requests for comment/Biographies(\|[^\]]*)?\]\]",  r"\[\[Wikipedia:Requests for comment/Economy, trade, and companies(\|[^\]]*)?\]\]",
-                      r"\[\[Wikipedia:Requests for comment/History and geography(\|[^\]]*)?\]\]",  r"\[\[Wikipedia:Requests for comment/Language and linguistics(\|[^\]]*)?\]\]",
-                      r"\[\[Wikipedia:Requests for comment/Media, the arts, and architecture(\|[^\]]*)?\]\]",  r"\[\[Wikipedia:Requests for comment/Politics, government, and law(\|[^\]]*)?\]\]",
-                      r"\[\[Wikipedia:Requests for comment/Religion and philosophy(\|[^\]]*)?\]\]", r"\[\[Wikipedia:Requests for comment/Society, sports, and culture(\|[^\]]*)?\]\]",
-                      r"\[\[Wikipedia:Requests for comment/Wikipedia style and naming(\|[^\]]*)?\]\]", r"\[\[Wikipedia:Requests for comment/Wikipedia policies and guidelines(\|[^\]]*)?\]\]",
-                      r"\[\[Wikipedia:Requests for comment/WikiProjects and collaborations(\|[^\]]*)?\]\]", r"\[\[Wikipedia:Requests for comment/Wikipedia technical issues and templates(\|[^\]]*)?\]\]",
-                      r"\[\[Wikipedia:Requests for comment/Wikipedia proposals(\|[^\]]*)?\]\]", r"\[\[Wikipedia:Requests for comment/Unsorted(\|[^\]]*)?\]\]"]
+_definite_rfc_re = [_rfc_tag_re, _CLOSE_COMMENT_RE]
 
-exclude_rfc_https = ["https://en.wikipedia.org/wiki/RFC", "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/All",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Biographies",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Economy,_trade,_and_companies",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/History_and_geography",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Language_and_linguistics",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Maths,_science,_and_technology",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Media,_the_arts,_and_architecture",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Politics,_government,_and_law",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Religion_and_philosophy",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Society,_sports,_and_culture",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Wikipedia_style_and_naming",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Wikipedia_policies_and_guidelines",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/WikiProjects_and_collaborations",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Wikipedia_technical_issues_and_templates",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Wikipedia_proposals",
-                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Unsorted"
-                     ]
 
-_exclude_rfc_page_re = re.compile(r"|".join(exclude_rfc_pages + exclude_rfc_https), re.I)
+
+#step 2-1
+_inner_link_template = r"\[\[[^\]]*?((rfcs?)|(Requests?(_| )*for(_| )*Comments?)).*?\]\]"
+_inner1 = re.compile(r"\[\[[^\]]*?rfcs?.*?\]\]", re.I)
+_inner2 = re.compile(r"\[\[[^\]]*?Requests? *for *Comments?.*?\]\]", re.I)
+_inner3 = re.compile(r"\[\[[^\]]*?Requests?_*for_*Comments?.*?\]\]", re.I)
+_inner_link_pointer_re = re.compile(_inner_link_template, re.IGNORECASE)
+
+exclude_rfc_pages = [ r"\[\[(Wikipedia|WP):RFC(\|[^\]]*)?\]\]", r"\[\[(Wikipedia|WP):RFC/U(\|[^\]]*)?\]\]", r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment(\|[^\]]*)?\]\]",
+                      r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/User( |_)*conduct(\|[^\]]*)?\]\]", r"\[\[(Wikipedia|WP):ANRFC(\|[^\]]*)?\]\]",
+                      r"\[\[(Wikipedia|WP):Administrators%27_noticeboard(\|[^\]]*)?\]\]",r"\[\[(Wikipedia|WP):AN(\|[^\]]*)?\]\]",
+                      r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/All(\|[^\]]*)?\]\]", r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment(\|[^\]]*)?\]\]",
+                      r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Maths,( |_)*science,( |_)*and( |_)*technology(\|[^\]]*)?\]\]",
+                      r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Biographies(\|[^\]]*)?\]\]",  r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Economy,( |_)*trade,( |_)*and( |_)*companies(\|[^\]]*)?\]\]",
+                      r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/History( |_)*and( |_)*geography(\|[^\]]*)?\]\]",  r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Language( |_)*and( |_)*linguistics(\|[^\]]*)?\]\]",
+                      r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Media,( |_)*the arts,( |_)*and( |_)*architecture(\|[^\]]*)?\]\]",  r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Politics,( |_)*government,( |_)*and( |_)*law(\|[^\]]*)?\]\]",
+                      r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Religion( |_)*and( |_)*philosophy(\|[^\]]*)?\]\]", r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Society,( |_)*sports,( |_)*and( |_)*culture(\|[^\]]*)?\]\]",
+                      r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Wikipedia( |_)*style( |_)*and( |_)*naming(\|[^\]]*)?\]\]", r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Wikipedia( |_)*policies( |_)*and( |_)*guidelines(\|[^\]]*)?\]\]",
+                      r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/WikiProjects( |_)*and( |_)*collaborations(\|[^\]]*)?\]\]", r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Wikipedia( |_)*technical( |_)*issues( |_)*and( |_)*templates(\|[^\]]*)?\]\]",
+                      r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Wikipedia( |_)*proposals(\|[^\]]*)?\]\]", r"\[\[(Wikipedia|WP):Requests?( |_)*for( |_)*comment/Unsorted(\|[^\]]*)?\]\]"]
+exclude_rfc_compiled_regex = [re.compile(ex, re.I) for ex in exclude_rfc_pages]
+
+_wiki_header = "//en.wikipedia.org/wiki/"
+_rfc_https = ["RFC", "Wikipedia:Requests_for_comment","Wikipedia:Requests_for_comment/All",
+                "Wikipedia:Requests_for_comment/Biographies", "Wikipedia:Requests_for_comment/Economy,_trade,_and_companies",
+                "Wikipedia:Requests_for_comment/History_and_geography","Wikipedia:Requests_for_comment/Language_and_linguistics",
+                "Wikipedia:Requests_for_comment/Maths,_science,_and_technology", "Wikipedia:Requests_for_comment/Media,_the_arts,_and_architecture",
+                "Wikipedia:Requests_for_comment/Politics,_government,_and_law", "Wikipedia:Requests_for_comment/Religion_and_philosophy",
+                "Wikipedia:Requests_for_comment/Society,_sports,_and_culture", "Wikipedia:Requests_for_comment/Wikipedia_style_and_naming",
+                "Wikipedia:Requests_for_comment/Wikipedia_policies_and_guidelines", "Wikipedia:Requests_for_comment/WikiProjects_and_collaborations",
+                "Wikipedia:Requests_for_comment/Wikipedia_technical_issues_and_templates", "Wikipedia:Requests_for_comment/Wikipedia_proposals",
+                "Wikipedia:Requests_for_comment/Unsorted"
+                ]
+exclude_rfc_https = [_wiki_header + pattern for pattern in _rfc_https]
+
+_FYI_RE = r"{{FYI\|Pointer to relevant discussion elsewhere.}}|{{FYI}}|{{FYI\|"
+
+
+def is_rfc(text, article):
+    # step 1
+    for pattern in _definite_rfc_re:
+        if pattern.search(text):
+            return True
+
+    if re.search(_FYI_RE, text):
+        return False
+
+    # step 2
+    filtered_patterns = set()
+
+    for i in [_inner1, _inner2, _inner3]:
+        i_foundall = i.findall(text)
+        for link in i_foundall:
+            link = link.strip()
+            if not any([r.search(link) for r in exclude_rfc_compiled_regex]):
+                filtered_patterns.add(link)
+
+    for e in [_exter1, _exter2]:
+        e1_foundall = e.findall(text)
+        for link in e1_foundall:
+            link = link.strip()
+            link = re.sub("https?://", '', link)
+            if link not in exclude_rfc_https:
+                filtered_patterns.add(link)
+
+    if len(filtered_patterns) > 0:
+        article.candidate_reason = ",".join(list(filtered_patterns))
+        article.save()
+        print filtered_patterns
+        return False
+
+    return True
+
+# step 2-2
+_external_link_pointer_re = re.compile(r"//en.wikipedia.org/wiki/[a-zA-Z0-9_:/]*((rfcs?)|(Requests?(_)*for(_)*Comments?))[a-zA-Z0-9_:/]*", re.I)
+_exter1 = re.compile(r"//en.wikipedia.org/wiki/[a-zA-Z0-9_:/#]*rfcs?[a-zA-Z0-9_:/]*", re.I)
+_exter2 = re.compile(r"//en.wikipedia.org/wiki/[a-zA-Z0-9_:/#]*Requests?_*for_*Comments?[a-zA-Z0-9_:/]*", re.I)
+
+
+#
+
 # example of wiki link
 # [[Talk:Martin Landau#RfC: Is a career image better for the lead.3F]]
 # [[Wikipedia talk:Manual of Style/Images/Archive 6|the February 2016 RfC]]
@@ -88,10 +150,12 @@ def get_candidate_type():
         comments = Comment.objects.filter(article_id = article.id).order_by('id')
         first_comment = comments.first()
         first_comment_text = first_comment.text
+        article.first_comment = first_comment_text
+
         # search for link first
         if _talk_link_re.search(first_comment_text):
             article.candidate_type = 1
-        if _pointer_re.search(first_comment_text) and not _rfc_tag_re.search(first_comment_text) and not _CLOSE_COMMENT_RE.search(first_comment_text) and not _exclude_rfc_page_re.search(first_comment_text):
+        if not is_rfc(first_comment_text, article):
             article.candidate_type = 2
 
         article.save()

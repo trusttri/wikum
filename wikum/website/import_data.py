@@ -16,6 +16,152 @@ _CLOSE_COMMENT_KEYWORDS =  [r'{{(atop|quote box|consensus|Archive(-?)( ?)top|Dis
 _CLOSE_COMMENT_RE = re.compile(r'|'.join(_CLOSE_COMMENT_KEYWORDS), re.IGNORECASE|re.DOTALL)
 
 
+_rfc_format = r"(_)*rfc(s)?(_)*|(_)*Request(s)?(_)*for(_)*Comment(s)?(_)*"
+_rfc_key = re.compile(_rfc_format, re.I)
+
+_talk_link_re = re.compile(r'|'.join(["\[https?://en.wikipedia.org/wiki/.*?\]", "\[\[.*?:\]\]"]))
+
+#exclude WP:RFC
+_WIKI_TEMPLATE_RFC_RE = r"\[\[[^\]]*?((rfc(s)?)|(Request(s)?(_| )*for(_| )*Comment(s)?)).*?\]\]"
+_HTTPS_RFC_RE = r"https?://en.wikipedia.org/wiki/.*?(rfc(s)?)|(Request(s)?(_)*for(_)*Comment(s)?).*"
+_FYI_RE = r"{{FYI\|Pointer to relevant discussion elsewhere.}}|{{FYI}}|{{FYI\|"
+
+_pointer_re = re.compile(r'|'.join([_WIKI_TEMPLATE_RFC_RE, _HTTPS_RFC_RE, _FYI_RE]), re.IGNORECASE)
+
+_rfc_tag_re = re.compile(r'{{rfc', re.I)
+
+# "[[WP:RFC|request for comment|]]
+exclude_rfc_pages = [ r"\[\[WP:RFC(\|[^\]]*)?\]\]",
+                      r"\[\[Wikipedia:Requests for comment/All(\|[^\]]*)?\]\]", r"\[\[Wikipedia:Requests for comment(\|[^\]]*)?\]\]",
+                      r"\[\[Wikipedia:Requests for comment/Maths, science, and technology(\|[^\]]*)?\]\]",
+                      r"\[\[Wikipedia:Requests for comment/Biographies(\|[^\]]*)?\]\]",  r"\[\[Wikipedia:Requests for comment/Economy, trade, and companies(\|[^\]]*)?\]\]",
+                      r"\[\[Wikipedia:Requests for comment/History and geography(\|[^\]]*)?\]\]",  r"\[\[Wikipedia:Requests for comment/Language and linguistics(\|[^\]]*)?\]\]",
+                      r"\[\[Wikipedia:Requests for comment/Media, the arts, and architecture(\|[^\]]*)?\]\]",  r"\[\[Wikipedia:Requests for comment/Politics, government, and law(\|[^\]]*)?\]\]",
+                      r"\[\[Wikipedia:Requests for comment/Religion and philosophy(\|[^\]]*)?\]\]", r"\[\[Wikipedia:Requests for comment/Society, sports, and culture(\|[^\]]*)?\]\]",
+                      r"\[\[Wikipedia:Requests for comment/Wikipedia style and naming(\|[^\]]*)?\]\]", r"\[\[Wikipedia:Requests for comment/Wikipedia policies and guidelines(\|[^\]]*)?\]\]",
+                      r"\[\[Wikipedia:Requests for comment/WikiProjects and collaborations(\|[^\]]*)?\]\]", r"\[\[Wikipedia:Requests for comment/Wikipedia technical issues and templates(\|[^\]]*)?\]\]",
+                      r"\[\[Wikipedia:Requests for comment/Wikipedia proposals(\|[^\]]*)?\]\]", r"\[\[Wikipedia:Requests for comment/Unsorted(\|[^\]]*)?\]\]"]
+
+exclude_rfc_https = ["https://en.wikipedia.org/wiki/RFC", "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/All",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Biographies",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Economy,_trade,_and_companies",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/History_and_geography",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Language_and_linguistics",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Maths,_science,_and_technology",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Media,_the_arts,_and_architecture",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Politics,_government,_and_law",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Religion_and_philosophy",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Society,_sports,_and_culture",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Wikipedia_style_and_naming",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Wikipedia_policies_and_guidelines",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/WikiProjects_and_collaborations",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Wikipedia_technical_issues_and_templates",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Wikipedia_proposals",
+                     "https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Unsorted"
+                     ]
+
+_exclude_rfc_page_re = re.compile(r"|".join(exclude_rfc_pages + exclude_rfc_https), re.I)
+# example of wiki link
+# [[Talk:Martin Landau#RfC: Is a career image better for the lead.3F]]
+# [[Wikipedia talk:Manual of Style/Images/Archive 6|the February 2016 RfC]]
+# [[Talk:Family Guy#RfC: Remove "adult" as a descriptor from the opening sentence]]
+# [[Talk:2014_Iranian-led_intervention_in_Iraq#RFC:_Military_intervention_against_ISIS_2014_in_Iraq]]
+# [[Wikipedia:Requests for comment/Global consensus check:Sports notability guideline|join in the converstion]]
+
+# example of https
+# [https://en.wikipedia.org/wiki/Wikipedia:Requests_for_comment/Slrubenstein request for comment]
+
+# relevant pointer
+# {{FYI|Pointer to relevant discussion elsewhere.}}
+# The rfc is here
+
+
+# retrieve candidate type
+# 1: no link
+# 2: link, but no rfc keyword
+# 3: link, with rfc keyword
+def get_candidate_type():
+    articles = Article.objects.all()
+    for article in articles:
+        # get the first comment
+        print article.id
+        comments = Comment.objects.filter(article_id = article.id).order_by('id')
+        first_comment = comments.first()
+        first_comment_text = first_comment.text
+        # search for link first
+        if _talk_link_re.search(first_comment_text):
+            article.candidate_type = 1
+        if _pointer_re.search(first_comment_text) and not _rfc_tag_re.search(first_comment_text) and not _CLOSE_COMMENT_RE.search(first_comment_text) and not _exclude_rfc_page_re.search(first_comment_text):
+            article.candidate_type = 2
+
+        article.save()
+
+
+def extract_rfcs_from_pointers():
+    pointers = Article.objects.filter(candidate_type = 1)
+    # for pointer in pointers:
+
+
+# for getting number of comments in article
+def get_article_num_comments():
+    articles = Article.objects.all()
+    for article in articles:
+        article.comment_num = article.comment_set.count()
+        article.save()
+    print 'all finished'
+
+# for getting number of replies of all comments
+# assume disqus_id of valid comment is not an empty string or none
+def get_all_comments_num_replies():
+    def count_replies(article):
+        comments = Comment.objects.filter(article=article)
+        for c in comments:
+            if c.disqus_id != '':
+                replies = Comment.objects.filter(reply_to_disqus=c.disqus_id, article=article).count()
+                c.num_replies = replies
+                c.save()
+
+    articles = Article.objects.all()
+    for a in articles:
+        count_replies(a)
+
+### need to do with boundary because the first 2034 were done manually ###
+def get_close_comment(boundary):
+    articles = Article.objects.all()
+    for article in articles:
+        # if it's not stored yet
+        # closed_comment = CloseComment.objects.filter(article_id = article.id)
+        if article.id > boundary:
+            article_comments = Comment.objects.filter(article_id = article.id)
+            for comment in article_comments:
+                if re.search(_CLOSE_COMMENT_RE, comment.text):
+                    CloseComment.objects.get_or_create(article = article, comment = comment, author = comment.author)
+                    article.closed = True
+                    article.save()
+
+
+### need to do with boundary because the first 2034 were done manually ###
+def get_open_comment(boundary):
+    articles = Article.objects.all()
+    for article in articles:
+        # open_comment = OpenComment.obejcts.filter(article_id = article.id)
+        # if it's not stored yet
+        if article.id > boundary:
+            article_comments = Comment.objects.filter(article_id = article.id, created_at__isnull=False).exclude(author_id=13891).order_by('created_at')
+            #get the most oldest one
+            open_comment = article_comments.first()
+            OpenComment.objects.get_or_create(article = article, comment = open_comment, author = open_comment.author)
+
+
+#### store separately ####
+def filter_ads():
+    articles = Article.objects.all()
+    for a in articles:
+        comment_num = a.num_comments
+        if comment_num < 3:
+            print 'possible candidate of non-RFC'
+
+
 def get_comment_levels():
     articles = Article.objects.all()
     for a in articles:
@@ -111,6 +257,11 @@ def add_open_comment(url, comment_id):
     else:
         print "the comment is not among the article's comments"
 
+def delete_article(id):
+    article = Article.objects.get(id = id)
+    print id
+    article.delete()
+
 
 def add_close_comment(url, comment_id):
     article = Article.objects.get(url=url)
@@ -186,7 +337,8 @@ def get_article(url, source, num):
             section = None
             if len(wiki_parts) > 1:
                 section = wiki_parts[1]
-            
+
+            print domain
             from wikitools import wiki, api
             site = wiki.Wiki(domain + '/w/api.php')
             page = urllib2.unquote(str(wiki_sub[0]) + ':' + wiki_page.encode('ascii', 'ignore'))
@@ -208,8 +360,10 @@ def get_article(url, source, num):
                             section_title = s['line']
                             section_index = s['index']
                 title = result['parse']['title']
+                print 'actual title'
+                print title
                 if section_title:
-                    title = title + ' - ' + section_title
+                    title = title + ' # ' + section_title
 
                 link = urllib2.unquote(url)
                 article,_ = Article.objects.get_or_create(disqus_id=id, title=title, url=link, source=source, section_index=section_index)
@@ -342,7 +496,9 @@ def get_wiki_talk_posts(article, current_task, total_count):
     domain = article.url.split('/wiki/')[0]
     site = wiki.Wiki(domain + '/w/api.php')
     
-    title = article.title.split(' - ')
+    title = article.title.split(' # ')
+    print "retrieved title"
+    print title
     # "section_index" is the index number of the section within the page.
     # There are some cases when wikicode does not parse a section as a section when given a "whole page".
     # To prevent this, we first grab only the section(not the entire page) using "section_index" and parse it.
@@ -351,7 +507,8 @@ def get_wiki_talk_posts(article, current_task, total_count):
     params = {'action': 'query', 'titles': title[0],'prop': 'revisions', 'rvprop': 'content', 'format': 'json','redirects':'yes'}
     if section_index:
         params['rvsection'] = section_index
-
+    print params
+    print section_index
     request = api.APIRequest(site, params)
     result = request.query()
     id = article.disqus_id.split('#')[0]

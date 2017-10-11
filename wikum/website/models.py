@@ -49,6 +49,10 @@ class Article(models.Model):
 
     closed = models.BooleanField(default=False)
 
+    candidate_type = models.IntegerField(default = 0)
+    candidate_reason = models.TextField(null=True)
+    first_comment = models.TextField(null=True)
+
     def __unicode__(self):
         return self.title
     
@@ -120,6 +124,8 @@ class Comment(models.Model):
 
     reply_level = models.IntegerField(default=0)
 
+
+
     def __unicode__(self):
         return 'Comment by %s on %s' % (self.author, self.article.title)
     
@@ -148,7 +154,7 @@ class CommentAuthor(models.Model):
     edit_count = models.IntegerField(default=0)
     gender = models.CharField(max_length=15, null=True)
     groups = models.TextField(null=True)
-    
+
     def __unicode__(self):
         if self.anonymous:
             return self.real_name

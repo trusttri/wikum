@@ -69,6 +69,18 @@ class History(models.Model):
     
     def __unicode__(self):
         return self.action
+
+
+class MetaComment(models.Model):
+    id = models.AutoField(primary_key=True)
+    article = models.ForeignKey('Article')
+    comment = models.ForeignKey('Comment')
+    user = models.ForeignKey(User, null=True)
+    datetime = models.DateTimeField(auto_now=True)
+    text = models.TextField()
+
+    def __unicode__(self):
+        return self.text
     
 class Tag(models.Model):
     id = models.AutoField(primary_key=True)
@@ -124,7 +136,8 @@ class Comment(models.Model):
 
     reply_level = models.IntegerField(default=0)
 
-
+    summary_likes = models.IntegerField(default=0)
+    summary_dislikes = models.IntegerField(default=0)
 
     def __unicode__(self):
         return 'Comment by %s on %s' % (self.author, self.article.title)

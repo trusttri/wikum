@@ -7,6 +7,9 @@ var highlighted_text = null;
 var highlighted_comm = null;
 var highlight_text = null;
 
+// put color information
+var nodeColorInfo = {}
+
 var margin = {top: 30, right: 20, bottom: 30, left: 20},
     width = 600 - margin.left - margin.right,
     barHeight = 30;
@@ -45,7 +48,6 @@ svg.append('svg:rect')
   })
   .on('mousedown', function() {
   		isMouseDown = true;
-
   		cancelClick = setTimeout(is_click, 250);
    		var p = d3.mouse( this);
 

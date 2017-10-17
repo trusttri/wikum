@@ -50,6 +50,10 @@ urlpatterns = [
 
     url(r'^tag_comments','website.views.tag_comments'),
     url(r'^tag_comment','website.views.tag_comment'),
+    url(r'^evaluate_comment_summary', 'website.views.evaluate_comment_summary'),
+    url(r'^viz_meta_comments', 'website.views.viz_meta_comments'),
+    url(r'^insert_summary_evaluation', 'website.views.insert_summary_evaluation'),
+
     
     url(r'^hide_replies','website.views.hide_replies'),
     url(r'^summarize_selected','website.views.summarize_selected'),
@@ -58,4 +62,6 @@ urlpatterns = [
     
     url(r"^account/", include("account.urls")),
     url(r'^admin/', admin.site.urls),
+
+
 ]

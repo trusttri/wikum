@@ -1,4 +1,4 @@
-from website.models import Article, Source, CommentAuthor, Comment, History, Tag, OpenComment, CloseComment
+from website.models import Article, Source, CommentAuthor, Comment, History, Tag, OpenComment, CloseComment, MetaComment
 from wikum.settings import DISQUS_API_KEY
 import urllib2
 import json
@@ -347,6 +347,25 @@ def get_pure_avg_expertise_participants():
     with open("E:/pure_expertise_edit_counts.json", "w") as file:
         json.dump(expertise_edit_counts, file)
 
+def get_sum_editcounts():
+    articles = Article.objects.all()
+    expertise_edit_counts = {}
+
+    for article in articles:
+        print article.id
+        comments = Comment.objects.filter(article=article)
+        authors = set([c.author for c in comments])
+
+        edit_count_expertise = 0
+        edit_count_num = 0
+
+        for author in authors:
+            edit_count = author.edit_count
+            edit_count_expertise += edit_count
+
+        expertise_edit_counts[article.id] = edit_count_expertise
+    with open("C:/Users/Jane Im/sum_expertise_edit_counts.json", "w") as file:
+        json.dump(expertise_edit_counts, file)
 
 
 def get_avg_expertise_participants():
@@ -1059,6 +1078,64 @@ def recur_level(comment, article_id, level):
                 levels.append(recur_level(r, article_id, level))
             return max(levels)
         return level
+
+def fix_author_info(track_unfound):
+    authors = CommentAuthor.objects.filter(disqus_id__isnull=True)
+    fixed_authors = []
+    unfound = load_json("E:/undisqus.json")
+    print len(unfound)
+    for author in authors:
+        if author.username not in unfound:
+            print author.username
+            from wikitools import wiki, api
+            site = wiki.Wiki('https://en.wikipedia.org/w/api.php')
+            params = {'action': 'query', 'list': 'users', 'ususers': author.username,
+                      'usprop': 'blockinfo|groups|editcount|registration|emailable|gender', 'format': 'json'}
+
+            request = api.APIRequest(site, params)
+            result = request.query()
+            if 'users' in result['query'] and len(result['query']['users']) > 0:
+                user = result['query']['users'][0]
+                # try:
+                if 'userid' in user:
+                    print "imported"
+                    if user['registration'] is not None:
+                        try:
+                            author.joined_at = datetime.datetime.strptime(user['registration'], '%Y-%m-%dT%H:%M:%SZ')
+
+                        except Exception:
+                            pass
+
+                    author.edit_count = user['editcount']
+                    author.gender = user['gender']
+                    author.groups = ','.join(user['groups'])
+                    author.is_wikipedia = True
+                    # should be the last
+                    author.disqus_id = user['userid']
+                    author.save()
+                    fixed_authors.append(author.username)
+                else:
+                    unfound.append(author.username)
+                    with open("E:/undisqus.json", "w") as file:
+                        json.dump(unfound, file)
+
+    with open("E:/fixed_usernames.json", "w") as file:
+        json.dump(fixed_authors, file)
+    with open("E:/undisqus.json", "w") as file:
+        json.dump(track_unfound, file)
+    print len(fixed_authors)
+    return fixed_authors
+
+            # comment_author = CommentAuthor.objects.create(username=user['name'],
+            #                                                       disqus_id=author_id,
+            #                                                       joined_at=user['registration'],
+            #                                                       edit_count=user['editcount'],
+            #                                                       gender=user['gender'],
+            #                                                       groups=','.join(user['groups']),
+            #                                                       is_wikipedia=True
+            #                                                       )
+            # except Exception:
+
 
 
 def get_deep_replies():

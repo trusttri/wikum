@@ -49,6 +49,7 @@ def index(request):
 
 @render_to('website/visualization.html')
 def visualization(request):
+    print "viz visited"
     url = request.GET['article']
     num = int(request.GET.get('num', 0))
     article = Article.objects.filter(url=url)[num]
@@ -232,7 +233,7 @@ def recurse_viz(parent, posts, replaced, article, is_collapsed):
     children = []
     hid_children = []
     replace_children = []
-    
+
     pids = [post.disqus_id for post in posts]
     
     if replaced:
@@ -243,6 +244,7 @@ def recurse_viz(parent, posts, replaced, article, is_collapsed):
     reps = Comment.objects.filter(reply_to_disqus__in=pids, article=article).select_related()
     for post in posts:
         if post.json_flatten == '':
+            print 'exist  ' + str(post.id)
         #if True:
             if post.author:
                 if post.author.anonymous:
@@ -258,7 +260,9 @@ def recurse_viz(parent, posts, replaced, article, is_collapsed):
                   'author': author,
                   'replace_node': post.is_replacement,
                   'collapsed': is_collapsed,
-                  'tags': [(tag.text, tag.color) for tag in post.tags.all()]
+                  'tags': [(tag.text, tag.color) for tag in post.tags.all()],
+                  'summary_likes': post.summary_likes,
+                  'summary_dislikes': post.summary_dislikes
                   }
 
             if 'https://en.wikipedia.org/wiki/' in article.url:
@@ -281,10 +285,7 @@ def recurse_viz(parent, posts, replaced, article, is_collapsed):
                 
             else:
                 v1['name'] = post.text
-                v1['summary'] = post.summary
-                v1['extra_summary'] = post.extra_summary
-                
-            
+
             
             c1 = reps.filter(reply_to_disqus=post.disqus_id).order_by('-points')
             if c1.count() == 0:
@@ -308,7 +309,15 @@ def recurse_viz(parent, posts, replaced, article, is_collapsed):
                 num_subtree_children += num_subchildren
         else:
             v1 = json.loads(post.json_flatten)
-        
+            v1['summary_likes'] = post.summary_likes
+            v1['summary_dislikes'] = post.summary_dislikes
+
+            print post.id
+            print post.summary_likes
+            print post.summary_dislikes
+            print v1['summary_likes']
+            print v1['summary_dislikes']
+
         if post.hidden:
             hid_children.append(v1)
         elif parent and parent.is_replacement:
@@ -373,11 +382,17 @@ def summarize_comment(request):
                 res['bottom_summary'] = ''
             
             res['bottom_summary_wiki'] = bottom_summary
+
+            res['summary_likes'] = c.summary_likes,
+            res['summary_dislikes'] = c.summary_dislikes
                 
             return JsonResponse(res)
         else:
             return JsonResponse({'top_summary': top_summary,
-                                 'bottom_summary': bottom_summary})
+                                 'bottom_summary': bottom_summary,
+                                 'summary_likes': c.summary_likes,
+                                 'summary_dislikes': c.summary_dislikes
+                                 })
         
         
     except Exception, e:
@@ -477,12 +492,17 @@ def summarize_selected(request):
                 res['bottom_summary'] = ''
             
             res['bottom_summary_wiki'] = bottom_summary
-                
+
+            res['summary_likes'] = new_comment.summary_likes,
+            res['summary_dislikes'] = new_comment.summary_dislikes
+
             return JsonResponse(res)
         else:
             return JsonResponse({'d_id': new_comment.id,
                                  'top_summary': top_summary,
-                                 'bottom_summary': bottom_summary})
+                                 'bottom_summary': bottom_summary,
+                                 'summary_likes': new_comment.summary_likes,
+                                 'summary_dislikes': new_comment.summary_dislikes})
         
     except Exception, e:
         print e
@@ -616,12 +636,18 @@ def summarize_comments(request):
                 res['bottom_summary'] = ''
             
             res['bottom_summary_wiki'] = bottom_summary
-                
+
+            res['summary_likes'] = new_comment.summary_likes,
+            res['summary_dislikes'] = new_comment.summary_dislikes
+
             return JsonResponse(res)
         else:
             return JsonResponse({'d_id': d_id,
                                  'top_summary': top_summary,
-                                 'bottom_summary': bottom_summary})
+                                 'bottom_summary': bottom_summary,
+                                 'summary_likes': new_comment.summary_likes,
+                                 'summary_dislikes': new_comment.summary_dislikes
+                                 })
         
     except Exception, e:
         print e
@@ -673,6 +699,62 @@ def tag_comments(request):
             return JsonResponse({'color': color})
         else:
             return JsonResponse({})
+    except Exception, e:
+        print e
+        return HttpResponseBadRequest()
+
+
+def evaluate_comment_summary(request):
+    try:
+        comment_id = request.POST['id']
+        like = request.POST['like']
+        comment = Comment.objects.get(id=comment_id)
+
+        if like == "true":
+            comment.summary_likes += 1
+        else:
+            comment.summary_dislikes += 1
+        recurse_up_post(comment)
+        comment.save()
+
+        return JsonResponse({})
+
+    except Exception, e:
+        print e
+        return HttpResponseBadRequest()
+
+def viz_meta_comments(request):
+    try:
+        comment_id = request.POST['id']
+        meta_comments = MetaComment.objects.filter(comment_id=comment_id)
+        res = []
+        for mc in meta_comments:
+            res.append({"time":mc.datetime, "text":mc.text, "user":mc.user})
+
+        return JsonResponse({"meta_comments":res})
+
+
+    except Exception, e:
+        print e
+        return HttpResponseBadRequest()
+
+def insert_summary_evaluation(request):
+    try:
+        print 'here'
+        # req_user = request.user if request.user.is_authenticated() else None
+        # time = request.POST['time']
+        # text = request.POST['text']
+        # print text
+        # comment = request.POST['comment']
+        # article = request.POST['article']
+
+        # mc = MetaComment.objects.create(user=req_user,
+        #                            article_id=article,
+        #                            comment_id=comment,
+        #                            datetime=time,
+        #                            text=text)
+        return JsonResponse({})
+
     except Exception, e:
         print e
         return HttpResponseBadRequest()
@@ -1253,7 +1335,10 @@ def recurse_get_parents(parent_dict, post, article):
         parent_dict['tags'] = [(tag.text, tag.color) for tag in parent.tags.all()]
             
         parent_dict['name'] = parent.text
-        
+
+        parent_dict['summary'] = post.summary
+        parent_dict['extra_summary'] = post.extra_summary
+
         new_dict = {}
         
         new_dict['children'] = [parent_dict]
@@ -1295,6 +1380,9 @@ def recurse_get_parents_stop(parent_dict, post, article, stop_id):
         parent_dict['extra_summary'] = parent.extra_summary
             
         parent_dict['name'] = parent.text
+
+        parent_dict['summary'] = post.summary
+        parent_dict['extra_summary'] = post.extra_summary
         
         new_dict = {}
         
@@ -1306,9 +1394,8 @@ def recurse_get_parents_stop(parent_dict, post, article, stop_id):
 
     else:
         return parent_dict['children'][0]
-    
-                
-        
+
+
         
         
     
